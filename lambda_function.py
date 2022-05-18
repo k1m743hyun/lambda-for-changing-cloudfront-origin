@@ -36,7 +36,7 @@ def lambda_handler(event, context):
         request['headers']['host'] = [{'key': 'Host', 'value': ORIGIN_ENDPOINT_3}]
         request['origin']['custom']['domainName'] = ORIGIN_ENDPOINT_3
 
-    with open('./api_info.json', 'r') as json_file:
+    with open('./json/api_info.json', 'r') as json_file:
         api_info = json.load(json_file)
 
     # Check the API from service_1 APIs
