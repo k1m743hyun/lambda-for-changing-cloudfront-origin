@@ -1,0 +1,10 @@
+{
+   "api_1": {
+       "endpoint": "legacy",
+       "header": ""
+   },
+    "api_2": {
+       "endpoint": "msa",
+       "header": ""
+   },
+}
