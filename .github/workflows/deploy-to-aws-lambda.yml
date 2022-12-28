@@ -1,6 +1,6 @@
 # This is a basic workflow to help you get started with Actions
 
-name: lambda-for-changing-cloudfront-origin CI
+name: Deploy to AWS Lambda
 
 # Controls when the workflow will run
 on:
@@ -9,7 +9,7 @@ on:
     branches:
       - main
     paths-ignore:
-      - '.github/workflows/codeql-analysis.yml'
+      - '.github/workflows/*'
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
@@ -19,15 +19,23 @@ jobs:
     runs-on: ubuntu-latest
     env:
       AWS_REGION: us-east-1 # 버지니아 북부
-      AWS_LAMBDA_FUNCTION_NAME: lambda-for-changing-cloudfront-origin
       AWS_CLOUDFRONT_ID: ${{ secrets.AWS_CLOUDFRONT_ID }}
 
+    # Skip running release workflow on forks
+    if: github.repository_owner == 'thkim0022'
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
+      
+      # Set up Python 3.8
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
 
+      # Configure AWS credentials from Test account
       - name: Configure AWS credentials from Test account
         uses: aws-actions/configure-aws-credentials@v1
         with:
@@ -37,29 +45,25 @@ jobs:
 
       # Make a Zip File
       - name: Make a Zip File
-        working-directory: ./${{ env.AWS_LAMBDA_FUNCTION_NAME }}
-        run: zip -r ${{ env.AWS_LAMBDA_FUNCTION_NAME }}.zip .
+        run: zip -r ${{ github.event.repository.name }}.zip .
 
       # Deploy to AWS Lambda
       - name: Deploy to AWS Lambda
-        working-directory: ./${{ env.AWS_LAMBDA_FUNCTION_NAME }}
         run: |
           aws lambda update-function-code \
-          --function-name ${{ env.AWS_LAMBDA_FUNCTION_NAME }} \
-          --zip-file fileb://${{ env.AWS_LAMBDA_FUNCTION_NAME }}.zip
+          --function-name ${{ github.event.repository.name }} \
+          --zip-file fileb://${{ github.event.repository.name }}.zip
           
       # Publish AWS Lambda
       - name: Publish AWS Lambda and Add alias
-        working-directory: ./${{ env.AWS_LAMBDA_FUNCTION_NAME }}
         run: |
           aws lambda publish-version \
           --description "Version published for Lambda@Edge" \
-          --function-name ${{ env.AWS_LAMBDA_FUNCTION_NAME }} > lam_conf.json;
+          --function-name ${{ github.event.repository.name }} > lam_conf.json;
           cat lam_conf.json
           
       # Get a CloudFront Configuration
       - name: Get CloudFront Configuration
-        working-directory: ./${{ env.AWS_LAMBDA_FUNCTION_NAME }}
         run: |
           aws cloudfront get-distribution-config \
           --id ${{ env.AWS_CLOUDFRONT_ID }} > cf_config.json;
@@ -67,20 +71,18 @@ jobs:
           
       # Modify CloudFront Configuration
       - name: Modify CloudFront Configuration
-        working-directory: ./${{ env.AWS_LAMBDA_FUNCTION_NAME }}
         run: |
           version=$(cat lam_conf.json | jq '.Version | tonumber');
           echo "AWS Lambda version: $version";
-          jq '.DistributionConfig.DefaultCacheBehavior.LambdaFunctionAssociations.Items[0].LambdaFunctionARN = "arn:aws:lambda:us-east-1:" + '\"${{ secrets.AWS_IAM }}\"' + ":function:" + '\"${{ env.AWS_LAMBDA_FUNCTION_NAME }}\"' + ":"  + '\"$version\"' | del(.ETag) | .[]' cf_config.json > cf_config_modified.json;
+          jq '.DistributionConfig.DefaultCacheBehavior.LambdaFunctionAssociations.Items[0].LambdaFunctionARN = "arn:aws:lambda:us-east-1:" + '\"${{ secrets.AWS_IAM }}\"' + ":function:" + '\"${{ github.event.repository.name }}\"' + ":"  + '\"$version\"' | del(.ETag) | .[]' cf_config.json > cf_config_modified.json;
 
         # cloudfront는 lambda alias로 연결할 수 없다.
         # aws lambda create-alias \
-        # --function-name ${{ env.AWS_LAMBDA_FUNCTION_NAME }} \
+        # --function-name ${{ github.event.repository.name }} \
         # --function-version $version \
 
       # Update a CloudFront Configuration
       - name: Update a CloudFront Configuration
-        working-directory: ./${{ env.AWS_LAMBDA_FUNCTION_NAME }}
         run: |
           etag=$(cat cf_config.json | jq -r '.ETag');
           echo "etag: $etag";
