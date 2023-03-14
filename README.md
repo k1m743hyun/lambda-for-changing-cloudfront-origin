@@ -3,7 +3,7 @@
 
 ### Description
 
-- d
+- Amazon CloudFront의 Origin을 강제로 변경하는 AWS Lambda 코드입니다.
 
 
 ### Environment
